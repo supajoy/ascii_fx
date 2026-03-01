@@ -690,9 +690,17 @@
       position: fixed; bottom: 46px; left: 50%; transform: translateX(-50%); z-index: 20;
       background: var(--bg-panel); border: 1px solid var(--border); border-radius: 0; padding: 4px 10px;
       font-family: var(--font-display); font-size: 14px; color: var(--text-dim);
-      pointer-events: none; opacity: 0; transition: opacity 0.3s;
+      pointer-events: none; opacity: 0; transition: opacity 0.3s, border-color 0.15s, color 0.15s;
     }
     .zoom-indicator.visible { opacity: 1; }
+    .zoom-indicator.snap { border-color: var(--red); color: var(--red); }
+
+    /* ── Snap flash on viewfinder corners ── */
+    @keyframes corner-snap {
+      0% { border-color: var(--red); opacity: 1; }
+      100% { border-color: var(--text-dim); opacity: 1; }
+    }
+    .corner-mark.snap { animation: corner-snap 0.5s ease-out; }
 
     /* ── Reset View button (bottom center, appears on zoom/pan) ── */
     .reset-view-btn {
@@ -1364,8 +1372,55 @@
       return { x: wx * VIEW.zoom + VIEW.panX, y: wy * VIEW.zoom + VIEW.panY };
     }
 
+    // ── SNAP ZOOM ──
+    const ZOOM_SNAP_THRESHOLD = 0.015;
+    let snapLocked = false;   // true while zoom is paused at a snap point
+    let snapLockTimer = null;
+    const SNAP_PAUSE_MS = 500; // how long zoom freezes at a snap point
+
+    function getSnapPoints() {
+      const W = window.innerWidth, H = window.innerHeight;
+      const availW = W - VF.left - VF.right;
+      const availH = H - VF.top - VF.bottom;
+      const fw = CONFIG.frameWidth, fh = CONFIG.frameHeight;
+      const vfFillZoom = Math.min(availW / fw, availH / fh);
+      return [
+        { zoom: VIEW.defaultZoom, label: 'FIT' },
+        { zoom: 1.0, label: '100%' },
+        { zoom: vfFillZoom, label: 'FILL' },
+      ];
+    }
+
+    function trySnap(newZoom) {
+      if (snapLocked) return VIEW.zoom; // frozen — ignore all zoom input
+      const snaps = getSnapPoints();
+      for (const sp of snaps) {
+        if (Math.abs(newZoom - sp.zoom) < ZOOM_SNAP_THRESHOLD * sp.zoom) {
+          // Lock zoom at this snap point
+          snapLocked = true;
+          clearTimeout(snapLockTimer);
+          snapLockTimer = setTimeout(() => { snapLocked = false; }, SNAP_PAUSE_MS);
+          showSnapFeedback(sp.label);
+          return sp.zoom;
+        }
+      }
+      return newZoom;
+    }
+
+    function showSnapFeedback(label) {
+      document.querySelectorAll('.corner-mark').forEach(cm => {
+        cm.classList.remove('snap');
+        void cm.offsetWidth;
+        cm.classList.add('snap');
+      });
+      const el = document.getElementById('zoom-indicator');
+      el.classList.add('snap');
+      setTimeout(() => el.classList.remove('snap'), SNAP_PAUSE_MS);
+    }
+
     function zoomAtPoint(newZoom, sx, sy) {
       newZoom = Math.max(VIEW.minZoom, Math.min(VIEW.maxZoom, newZoom));
+      newZoom = trySnap(newZoom);
       const world = screenToWorld(sx, sy);
       VIEW.zoom = newZoom;
       VIEW.panX = sx - world.x * newZoom;
@@ -1377,7 +1432,11 @@
     let zoomIndicatorTimer = null;
     function showZoomIndicator() {
       const el = document.getElementById('zoom-indicator');
-      el.textContent = Math.round(VIEW.zoom * 100) + '%';
+      const snaps = getSnapPoints();
+      const matched = snaps.find(sp => Math.abs(VIEW.zoom - sp.zoom) < 0.001);
+      el.textContent = matched
+        ? matched.label + ' · ' + Math.round(VIEW.zoom * 100) + '%'
+        : Math.round(VIEW.zoom * 100) + '%';
       el.classList.add('visible');
       clearTimeout(zoomIndicatorTimer);
       zoomIndicatorTimer = setTimeout(() => el.classList.remove('visible'), 1200);
@@ -3467,6 +3526,7 @@ export default AsciiArt;
       updatePickerState();
       applyLayerOrder();
       fitFrameToViewfinder(); // sets zoom/pan so frame fits inside corner marks
+      updateFrameOverlay();
       updateLayerProps();
       UndoManager.commit(); // baseline undo state
       loadPresetsFromStorage();
