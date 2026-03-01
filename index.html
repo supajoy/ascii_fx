@@ -215,18 +215,12 @@
     }
 
     /* Frame dims */
-    .frame-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-    .frame-row input[type="number"] {
-      width: 56px; background: #000; border: 1px solid var(--border);
-      border-radius: 0; padding: 4px 5px; color: var(--text); font-family: var(--font); font-size: 12px;
-      outline: none; text-align: center; -moz-appearance: textfield;
-    }
-    .frame-row input[type="number"]:focus { border-color: var(--red); }
-    .frame-row input[type="number"]::-webkit-inner-spin-button,
-    .frame-row input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    .frame-x { font-family: var(--font); font-size: 10px; color: var(--text-dim); }
     .frame-dims { display: none; }
     .frame-dims.active { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+    .frame-dims .ctrl-num {
+      width: 52px;
+    }
+    .frame-x { font-family: var(--font); font-size: 11px; color: var(--text-dim); }
 
     /* Export row */
     .export-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
@@ -1050,9 +1044,9 @@
       <div class="section-body">
         <button id="btn-frame">Frame</button>
         <div class="frame-dims active" id="frame-dims">
-          <input type="number" id="frame-w" value="1440" min="100" max="7680" />
+          <input type="text" class="ctrl-num" id="frame-w" value="1440" inputmode="numeric" />
           <span class="frame-x">&times;</span>
-          <input type="number" id="frame-h" value="900" min="100" max="4320" />
+          <input type="text" class="ctrl-num" id="frame-h" value="900" inputmode="numeric" />
         </div>
       </div>
     </div>
@@ -1249,7 +1243,7 @@
         <a href="https://www.instagram.com/joyysoni/" target="_blank" rel="noopener">Instagram</a>
         <a href="https://joysoni.com/" target="_blank" rel="noopener">Website</a>
       </div>
-      <div class="links-tagline">Made with f'ing around &amp; finding out :)</div>
+      <div class="links-tagline">Made by f'ing around &amp; finding out :)</div>
     </div>
 
   </div><!-- /left-sidebar -->
@@ -1520,6 +1514,7 @@
     const tileCtx = tileCanvas.getContext('2d', { willReadFrequently: true });
     const hdrCanvas = document.getElementById('hdr-canvas');
     const hdrCtxRef = hdrCanvas.getContext('2d');
+    const noiseBuf = document.createElement('canvas');
     const bloomBufA = document.getElementById('bloom-buf-a');
     const bloomBufB = document.getElementById('bloom-buf-b');
     const dropHint = document.getElementById('drop-hint');
@@ -1698,6 +1693,29 @@
         { id: 'ml', x: r.x - hs/2, y: r.y + r.h/2 - hs/2, cursor: 'ew-resize' },
         { id: 'mr', x: r.x + r.w - hs/2, y: r.y + r.h/2 - hs/2, cursor: 'ew-resize' },
       ];
+    }
+
+    function drawNoise() {
+      if (!CONFIG.frameEnabled) return;
+      const W = window.innerWidth, H = window.innerHeight;
+      const fr = getFrameRect();
+      const scale = 4;
+      const nw = Math.ceil(fr.w / scale), nh = Math.ceil(fr.h / scale);
+      if (nw <= 0 || nh <= 0) return;
+      noiseBuf.width = nw; noiseBuf.height = nh;
+      const nbCtx = noiseBuf.getContext('2d');
+      const imgData = nbCtx.createImageData(nw, nh);
+      const d = imgData.data;
+      for (let i = 0, len = nw * nh * 4; i < len; i += 4) {
+        const v = (Math.random() * 255) | 0;
+        d[i] = v; d[i+1] = v; d[i+2] = v; d[i+3] = 255;
+      }
+      nbCtx.putImageData(imgData, 0, 0);
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(noiseBuf, fr.x, fr.y, fr.w, fr.h);
+      ctx.restore();
     }
 
     function drawHandles() {
@@ -1902,6 +1920,7 @@
 
       lastCapturedFrame = { chars: frameChars, colors: frameColors, cols, rows, cellW, cellH };
 
+      drawNoise();
       computeBloom();
       drawHandles();
       drawGuides();
