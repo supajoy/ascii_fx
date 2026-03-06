@@ -7,7 +7,7 @@
 
   function setMode(mode) {
     ui.update(u => ({ ...u, activeTab: mode }));
-    config.update(c => ({ ...c, videoMode: mode === 'video' }));
+    config.update(c => ({ ...c, videoMode: mode === 'video', animEnabled: mode === 'video' }));
     playTab();
   }
 </script>

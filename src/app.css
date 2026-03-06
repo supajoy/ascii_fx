@@ -357,7 +357,7 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 }
 .export-res-row .export-label {
   font-family: var(--font); font-size: 11px; color: var(--muted);
-  min-width: 38px; flex-shrink: 0;
+  min-width: 56px; flex-shrink: 0;
 }
 .res-btn {
   flex: 1; font-size: 11px; padding: 2px 0;
@@ -370,7 +370,7 @@ input[type="range"]:hover::-moz-range-thumb { background: var(--accent); }
 }
 .export-row .export-label {
   font-family: var(--font); font-size: 11px; color: var(--muted);
-  min-width: 38px; flex-shrink: 0;
+  min-width: 56px; flex-shrink: 0;
 }
 .export-row button { flex: 1; }
 .export-feedback {

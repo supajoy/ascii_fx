@@ -146,22 +146,4 @@
       </div>
     </div>
   </div>
-{:else if selected === 'ascii'}
-  <div class="layer-props">
-    <div class="layer-props-header">ASCII Properties</div>
-    <div class="props-group">
-      <div class="props-row">
-        <span class="props-label">Size</span>
-        <input type="range" min={4} max={32} value={$config.fontSize} oninput={(e) => { config.update(c => ({ ...c, fontSize: Number(e.target.value) })); debouncedCommit(); }} />
-        <input type="number" class="props-num" min={4} max={32} value={$config.fontSize} oninput={(e) => { config.update(c => ({ ...c, fontSize: Number(e.target.value) })); debouncedCommit(); }} />
-        <span class="props-unit">px</span>
-      </div>
-      <div class="props-row">
-        <span class="props-label">Line H</span>
-        <input type="range" min={50} max={200} value={Math.round($config.lineHeight * 100)} oninput={(e) => { config.update(c => ({ ...c, lineHeight: Number(e.target.value) / 100 })); debouncedCommit(); }} />
-        <input type="number" class="props-num" min={50} max={200} value={Math.round($config.lineHeight * 100)} oninput={(e) => { config.update(c => ({ ...c, lineHeight: Number(e.target.value) / 100 })); debouncedCommit(); }} />
-        <span class="props-unit">%</span>
-      </div>
-    </div>
-  </div>
 {/if}

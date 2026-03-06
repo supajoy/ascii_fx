@@ -52,6 +52,13 @@ export function setActiveSelection(sel) { activeSelection = sel; }
 export function getMovedGroups() { return movedGroups; }
 export function getLastCapturedFrame() { return lastCapturedFrame; }
 
+export function clearSource() {
+  sourceReady = false;
+  sourceElement = null;
+  sourceIsVideo = false;
+  sourceFileName = '';
+}
+
 /**
  * Start the main requestAnimationFrame render loop.
  *
@@ -78,7 +85,8 @@ export function startRenderLoop(canvases) {
 
     // ── Standalone animation (no source needed) ──
     if (!sourceReady && !sourceElement && cfg.animEnabled) {
-      const sw = window.innerWidth, sh = window.innerHeight;
+      const sw = cfg.useCustomFrame ? cfg.frameWidth : window.innerWidth;
+      const sh = cfg.useCustomFrame ? cfg.frameHeight : window.innerHeight;
       if (asciiCanvas.width !== sw || asciiCanvas.height !== sh) {
         asciiCanvas.width = sw; asciiCanvas.height = sh;
       }
@@ -247,26 +255,37 @@ export function startRenderLoop(canvases) {
         }
       }
 
-      // ── Effect Intensity ──
-      // At 100 every cell gets full dense ASCII (even black areas).
-      // At 0 only the brightest highlights keep characters; dark cells become spaces.
+      // ── Effect Intensity (INTNS) ──
+      // At 0: full detail with contrast — highlights pop, shadows stay defined
+      // At 100: only brightest highlights keep characters, dark areas become empty
       const fxInt = cfg.effectIntensity / 100;
-      // Lift brightness so dark areas get visible characters
-      const fxB = Math.min(1, fB + fxInt * (1 - fB));
-      // Lift detail floor so dark areas still get a range of characters
-      const fxDet = Math.min(1, det + fxInt * (1 - det));
-      // Lift color so characters on black areas are actually visible
-      if (fxInt > 0 && fB < fxInt) {
-        const lift = (fxInt - fB) * 0.35;
-        fr = Math.min(255, fr + lift * 255);
-        fg = Math.min(255, fg + lift * 255);
-        fb = Math.min(255, fb + lift * 255);
+
+      // Contrast S-curve always applied for highlight/shadow separation
+      const contrastAmt = 1.8;
+      const contrasted = Math.max(0, Math.min(1, (fB - 0.5) * (1 + contrastAmt) + 0.5));
+
+      // Darkness threshold — as INTNS rises, darker cells get culled to spaces
+      const threshold = fxInt * 0.85;
+      let fxB, fxDet;
+      if (contrasted < threshold) {
+        // Below threshold: cell becomes a space
+        fxB = 0;
+        fxDet = 0;
+      } else {
+        // Remap remaining range so brightness still spans 0-1 above threshold
+        fxB = (contrasted - threshold) / (1 - threshold);
+        fxDet = det;
       }
+
+      // Contrast on color channels for sharper separation
+      const cScale = 1 + contrastAmt * 0.5;
+      const mid = 127.5;
+      fr = Math.max(0, Math.min(255, (fr - mid) * cScale + mid));
+      fg = Math.max(0, Math.min(255, (fg - mid) * cScale + mid));
+      fb = Math.max(0, Math.min(255, (fb - mid) * cScale + mid));
 
       const maxCI=Math.max(2,Math.round(fxDet*(charLen-1)));
       let ci=Math.min(Math.floor(fxB*(maxCI+1)),maxCI);
-      // At full intensity, guarantee at least char index 1 (not space)
-      if (fxInt >= 1 && ci === 0 && charLen > 1) ci = 1;
       let ch=chars[ci];
 
       // ── Gooey Hover ──

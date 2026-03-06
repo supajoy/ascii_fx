@@ -5,12 +5,14 @@
   import {
     getCompositeCanvas, getHDRCompositeCanvas, generateSVG,
     generateEmbed, generateReactComponent, generateVideoEmbed,
-    downloadFile
+    generateStandaloneAnimHTML, generateInteractionHTML,
+    generateInteractionReact, generateFramerOverride, generateFramerComponent, downloadFile
   } from '../../engine/export.js';
   import { playShutter } from '../../engine/sfx.js';
 
   let { isVideo = false } = $props();
   let scale = $state(1);
+  let transparentBg = $state(false);
   let feedback = $state('');
   let feedbackTimer;
 
@@ -19,6 +21,11 @@
     feedback = msg;
     clearTimeout(feedbackTimer);
     feedbackTimer = setTimeout(() => feedback = '', 1500);
+  }
+
+  function getCfg() {
+    const cfg = get(config);
+    return transparentBg ? { ...cfg, transparentBg: true } : cfg;
   }
 
   function getRefs() {
@@ -30,7 +37,7 @@
   // ── PNG ──
   function savePNG() {
     const refs = getRefs();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!refs) return;
     const comp = getCompositeCanvas(refs.asciiCanvas, refs.sourceCanvas, refs.hdrCanvas, cfg, scale);
     comp.toBlob(blob => {
@@ -46,7 +53,7 @@
 
   function copyPNG() {
     const refs = getRefs();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!refs) return;
     const comp = getCompositeCanvas(refs.asciiCanvas, refs.sourceCanvas, refs.hdrCanvas, cfg, scale);
     comp.toBlob(async blob => {
@@ -61,7 +68,7 @@
   // ── SVG ──
   function saveSVG() {
     const refs = getRefs();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!refs) return;
     const svg = generateSVG(refs.tileCanvas, cfg);
     downloadFile('ascii-fx.svg', svg, 'image/svg+xml');
@@ -70,7 +77,7 @@
 
   function copySVG() {
     const refs = getRefs();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!refs) return;
     const svg = generateSVG(refs.tileCanvas, cfg);
     navigator.clipboard.writeText(svg);
@@ -80,7 +87,7 @@
   // ── Embed ──
   function saveEmbed() {
     const frame = getLastCapturedFrame();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!frame) return;
     const html = generateEmbed(frame, cfg);
     downloadFile('ascii-embed.html', html, 'text/html');
@@ -89,7 +96,7 @@
 
   function copyEmbed() {
     const frame = getLastCapturedFrame();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!frame) return;
     const html = generateEmbed(frame, cfg);
     navigator.clipboard.writeText(html);
@@ -99,7 +106,7 @@
   // ── React ──
   function saveReact() {
     const frame = getLastCapturedFrame();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!frame) return;
     const code = generateReactComponent(frame, cfg);
     downloadFile('AsciiArt.jsx', code, 'text/javascript');
@@ -108,7 +115,7 @@
 
   function copyReact() {
     const frame = getLastCapturedFrame();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!frame) return;
     const code = generateReactComponent(frame, cfg);
     navigator.clipboard.writeText(code);
@@ -118,7 +125,7 @@
   // ── HDR PNG ──
   function saveHDR() {
     const refs = getRefs();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!refs) return;
     const comp = getHDRCompositeCanvas(refs.asciiCanvas, refs.sourceCanvas, cfg, scale);
     comp.toBlob(blob => {
@@ -134,7 +141,7 @@
 
   function copyHDR() {
     const refs = getRefs();
-    const cfg = get(config);
+    const cfg = getCfg();
     if (!refs) return;
     const comp = getHDRCompositeCanvas(refs.asciiCanvas, refs.sourceCanvas, cfg, scale);
     comp.toBlob(async blob => {
@@ -148,8 +155,14 @@
 
   // ── Video HTML ──
   function saveVideoHTML() {
-    const cfg = get(config);
-    const { sourceElement, sourceIsVideo } = getState();
+    const cfg = getCfg();
+    const { sourceElement } = getState();
+    if (!sourceElement) {
+      const html = generateStandaloneAnimHTML(cfg);
+      downloadFile('ascii-anim.html', html, 'text/html');
+      flash('Animation saved');
+      return;
+    }
     const W = window.innerWidth, H = window.innerHeight;
     const cellW = cfg.fontSize * 0.6, cellH = cfg.fontSize * cfg.lineHeight;
     const cols = Math.ceil(W / cellW), rows = Math.ceil(H / cellH);
@@ -159,8 +172,14 @@
   }
 
   function copyVideoHTML() {
-    const cfg = get(config);
-    const { sourceElement, sourceIsVideo } = getState();
+    const cfg = getCfg();
+    const { sourceElement } = getState();
+    if (!sourceElement) {
+      const html = generateStandaloneAnimHTML(cfg);
+      navigator.clipboard.writeText(html);
+      flash('Animation copied');
+      return;
+    }
     const W = window.innerWidth, H = window.innerHeight;
     const cellW = cfg.fontSize * 0.6, cellH = cfg.fontSize * cfg.lineHeight;
     const cols = Math.ceil(W / cellW), rows = Math.ceil(H / cellH);
@@ -168,7 +187,78 @@
     navigator.clipboard.writeText(html);
     flash('HTML copied');
   }
+
+  // ── Interaction Code Exports ──
+  function saveInteractHTML() {
+    const frame = getLastCapturedFrame();
+    const cfg = getCfg();
+    if (!frame) return;
+    const html = generateInteractionHTML(frame, cfg);
+    downloadFile('ascii-interaction.html', html, 'text/html');
+    flash('Interaction HTML saved');
+  }
+
+  function copyInteractHTML() {
+    const frame = getLastCapturedFrame();
+    const cfg = getCfg();
+    if (!frame) return;
+    const html = generateInteractionHTML(frame, cfg);
+    navigator.clipboard.writeText(html);
+    flash('Interaction HTML copied');
+  }
+
+  function saveInteractReact() {
+    const frame = getLastCapturedFrame();
+    const cfg = getCfg();
+    if (!frame) return;
+    const code = generateInteractionReact(frame, cfg);
+    downloadFile('AsciiInteraction.jsx', code, 'text/javascript');
+    flash('React saved');
+  }
+
+  function copyInteractReact() {
+    const frame = getLastCapturedFrame();
+    const cfg = getCfg();
+    if (!frame) return;
+    const code = generateInteractionReact(frame, cfg);
+    navigator.clipboard.writeText(code);
+    flash('React copied');
+  }
+
+  async function copyFramerOverride() {
+    try {
+      const frame = getLastCapturedFrame();
+      const cfg = getCfg();
+      if (!frame) return;
+      const code = generateFramerOverride(frame, cfg);
+      await navigator.clipboard.writeText(code);
+      flash('Override copied');
+    } catch (e) {
+      console.warn('Override copy failed', e);
+      flash('Copy failed');
+    }
+  }
+
+  async function copyFramerComponent() {
+    try {
+      const frame = getLastCapturedFrame();
+      const cfg = getCfg();
+      if (!frame) return;
+      const code = generateFramerComponent(frame, cfg);
+      await navigator.clipboard.writeText(code);
+      flash('Component copied');
+    } catch (e) {
+      console.warn('Component copy failed', e);
+      flash('Copy failed');
+    }
+  }
 </script>
+
+<div class="export-row">
+  <span class="export-label">BG</span>
+  <button class="res-btn" class:active={!transparentBg} onclick={() => transparentBg = false}>Solid</button>
+  <button class="res-btn" class:active={transparentBg} onclick={() => transparentBg = true}>Transparent</button>
+</div>
 
 {#if isVideo}
   <div class="export-row">
@@ -176,8 +266,20 @@
     <button onclick={saveVideoHTML}>Save</button>
     <button onclick={copyVideoHTML}>Copy</button>
   </div>
-  <div class="video-export-desc">
-    Self-contained HTML with ASCII effect, animation &amp; hover.
+  <div class="export-row">
+    <span class="export-label">Interact</span>
+    <button onclick={saveInteractHTML}>Save</button>
+    <button onclick={copyInteractHTML}>Copy</button>
+  </div>
+  <div class="export-row">
+    <span class="export-label">React</span>
+    <button onclick={saveInteractReact}>Save</button>
+    <button onclick={copyInteractReact}>Copy</button>
+  </div>
+  <div class="export-row">
+    <span class="export-label">Framer</span>
+    <button onclick={copyFramerOverride}>Override</button>
+    <button onclick={copyFramerComponent}>Component</button>
   </div>
 {:else}
   <div class="export-res-row">
@@ -205,6 +307,11 @@
     <span class="export-label">React</span>
     <button onclick={saveReact}>Save</button>
     <button onclick={copyReact}>Copy</button>
+  </div>
+  <div class="export-row">
+    <span class="export-label">Framer</span>
+    <button onclick={copyFramerOverride}>Override</button>
+    <button onclick={copyFramerComponent}>Component</button>
   </div>
   {#if $config.hdrEnabled}
     <div class="export-row">

@@ -35,7 +35,7 @@
     const cfg = get(config);
     if (!frame) return;
     const code = generateFramerOverride(frame, cfg);
-    downloadFile('AsciiOverride.tsx', code, 'text/typescript');
+    navigator.clipboard.writeText(code);
     flashBtn(e);
   }
 

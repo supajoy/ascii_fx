@@ -7,9 +7,6 @@
   import Section from './Section.svelte';
   import CharPanel from '../panels/CharPanel.svelte';
   import EffectsPanel from '../panels/EffectsPanel.svelte';
-  import AppearSection from '../panels/AppearSection.svelte';
-  import HoverSection from '../panels/HoverSection.svelte';
-  import InteractExport from '../panels/InteractExport.svelte';
   import ExportPanel from '../panels/ExportPanel.svelte';
 
   let tab = $state('style');
@@ -193,7 +190,6 @@
   <!-- Tab bar -->
   <div class="sidebar-tabs">
     <button class="sidebar-tab" class:active={tab === 'style'} onclick={() => setTab('style')}>STYLE</button>
-    <button class="sidebar-tab" class:active={tab === 'interact'} onclick={() => setTab('interact')}>INTERACT</button>
     <button class="sidebar-tab" class:active={tab === 'export'} onclick={() => setTab('export')}>OUT</button>
   </div>
 
@@ -318,19 +314,6 @@
 
       <Section title="Effects">
         <EffectsPanel />
-      </Section>
-
-    {:else if tab === 'interact'}
-      <Section title="Appear Animation">
-        <AppearSection />
-      </Section>
-
-      <Section title="Hover Effect">
-        <HoverSection />
-      </Section>
-
-      <Section title="Code Export">
-        <InteractExport />
       </Section>
 
     {:else if tab === 'export'}

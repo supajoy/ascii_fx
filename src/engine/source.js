@@ -21,9 +21,13 @@ export function processSource(sourceElement, tileCanvas, tileCtx, srcCanvas, src
   tileCanvas.width = tw; tileCanvas.height = th;
   tileCtx.imageSmoothingEnabled = true;
 
-  // Get source's natural dimensions
-  const natW = sourceElement.naturalWidth || sourceElement.videoWidth || sourceElement.width;
-  const natH = sourceElement.naturalHeight || sourceElement.videoHeight || sourceElement.height;
+  // Get source's natural dimensions (with fallback for SVGs that report 0)
+  let natW = sourceElement.naturalWidth || sourceElement.videoWidth || sourceElement.width;
+  let natH = sourceElement.naturalHeight || sourceElement.videoHeight || sourceElement.height;
+  if (!natW || !natH) {
+    natW = sourceElement.width || 800;
+    natH = sourceElement.height || 600;
+  }
 
   if (!natW || !natH) {
     tileCtx.clearRect(0, 0, tw, th);

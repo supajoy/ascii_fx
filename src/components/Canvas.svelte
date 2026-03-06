@@ -6,7 +6,7 @@
   import {
     startRenderLoop, setSourceReady, setSourceElement, setSourceIsVideo,
     setSourceFileName, setMouse, setAnimStartTime, getState,
-    setActiveSelection, getMovedGroups
+    setActiveSelection, getMovedGroups, clearSource
   } from '../engine/renderer.js';
   import { playClick, playShutter } from '../engine/sfx.js';
   import placeholderUrl from '../assets/placeholder.jpg';
@@ -150,7 +150,7 @@
     e.target.value = '';
   }
 
-  function loadFile(file) {
+  async function loadFile(file) {
     const url = URL.createObjectURL(file);
     showDropHint = false;
     playShutter();
@@ -167,6 +167,22 @@
       sourceVideo.load();
       sourceVideo.play();
     } else {
+      // For SVGs, pre-read dimensions from viewBox/attributes for proper rasterization
+      if (file.type === 'image/svg+xml') {
+        const text = await file.text();
+        const parser = new DOMParser();
+        const svgDoc = parser.parseFromString(text, 'image/svg+xml');
+        const svgEl = svgDoc.documentElement;
+        const vb = svgEl.getAttribute('viewBox');
+        const w = svgEl.getAttribute('width');
+        const h = svgEl.getAttribute('height');
+        let svgW = 800, svgH = 600;
+        if (w && h) { svgW = parseFloat(w); svgH = parseFloat(h); }
+        else if (vb) { const parts = vb.split(/[\s,]+/); svgW = parseFloat(parts[2]); svgH = parseFloat(parts[3]); }
+        sourceImg.width = svgW;
+        sourceImg.height = svgH;
+      }
+
       sourceImg.src = url;
       sourceImg.onload = () => {
         setSourceElement(sourceImg);
@@ -236,11 +252,15 @@
     const onClearMoves = () => { getMovedGroups().length = 0; setActiveSelection(null); };
     window.addEventListener('clear-moves', onClearMoves);
 
+    const onClearSource = () => { clearSource(); showDropHint = true; };
+    window.addEventListener('clear-source', onClearSource);
+
     return () => {
       stop();
       window.removeEventListener('keydown', handleKeydown);
       window.removeEventListener('trigger-upload', onTriggerUpload);
       window.removeEventListener('clear-moves', onClearMoves);
+      window.removeEventListener('clear-source', onClearSource);
     };
   });
 
@@ -248,7 +268,7 @@
   let bgStyle = $derived(`background:rgb(${canvasColor.r},${canvasColor.g},${canvasColor.b})`);
 </script>
 
-<input type="file" accept="image/*,video/*" style="display:none" bind:this={fileInput} onchange={handleFileChange} />
+<input type="file" accept="image/*,video/*,.svg" style="display:none" bind:this={fileInput} onchange={handleFileChange} />
 <img class="hidden-src" bind:this={sourceImg} alt="" />
 <video class="hidden-src" bind:this={sourceVideo} muted loop playsinline></video>
 <canvas class="hidden-src" bind:this={processingCanvas}></canvas>

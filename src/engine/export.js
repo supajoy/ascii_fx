@@ -3,6 +3,7 @@
 
 import { rgbToHsl, hslToRgb } from './color.js';
 import { computeBloomForExport } from './hdr.js';
+import { buildComponentCode } from './_buildFramerComponent.js';
 
 export function generateVideoEmbed(cfg, sourceElement, cols, rows) {
   const W = window.innerWidth, H = window.innerHeight;
@@ -35,6 +36,7 @@ export function generateVideoEmbed(cfg, sourceElement, cols, rows) {
     asciiColorOverride: cfg.asciiColorOverride,
     asciiColor: cfg.asciiColor,
     canvasColor: cfg.canvasColor,
+    transparentBg: !!cfg.transparentBg,
   };
 
   return `<!DOCTYPE html>
@@ -45,7 +47,7 @@ export function generateVideoEmbed(cfg, sourceElement, cols, rows) {
 <title>ASCII FX Export</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:rgb(${embedCfg.canvasColor.r},${embedCfg.canvasColor.g},${embedCfg.canvasColor.b});overflow:hidden;width:100vw;height:100vh}
+body{background:${cfg.transparentBg ? 'transparent' : `rgb(${embedCfg.canvasColor.r},${embedCfg.canvasColor.g},${embedCfg.canvasColor.b})`};overflow:hidden;width:100vw;height:100vh}
 canvas{position:absolute;top:0;left:0;width:100vw;height:100vh}
 </style>
 </head>
@@ -80,7 +82,7 @@ function hslToRgb(h,s,l){let r,g,b;if(s===0){r=g=b=l}else{function hue2rgb(p,q,t
 
 function getAnimOff(cols,rows){
   const t=(performance.now()-startTime)/1000;
-  const speed=CFG.animSpeed/50,amp=CFG.animAmplitude/100;
+  const speed=Math.pow(CFG.animSpeed/50,1.5),amp=CFG.animAmplitude/100;
   const total=cols*rows;
   const off=new Float32Array(total*2);
   const type=CFG.animType;
@@ -192,7 +194,8 @@ export function generateEmbed(lastCapturedFrame, cfg) {
     rows += row + '\n';
   }
 
-  return `<!-- ASCII Effect Embed -->\n<div style="background:${bgHex};padding:0;margin:0;overflow:hidden;display:inline-block;line-height:${cfg.lineHeight};font-size:${fontSize}px">\n<pre style="margin:0;padding:0;font-family:'Courier New',Consolas,monospace;line-height:${cfg.lineHeight};letter-spacing:0">${rows}</pre>\n</div>`;
+  const bgStyle = cfg.transparentBg ? 'transparent' : bgHex;
+  return `<!-- ASCII Effect Embed -->\n<div style="background:${bgStyle};padding:0;margin:0;overflow:hidden;display:inline-block;line-height:${cfg.lineHeight};font-size:${fontSize}px">\n<pre style="margin:0;padding:0;font-family:'Courier New',Consolas,monospace;line-height:${cfg.lineHeight};letter-spacing:0">${rows}</pre>\n</div>`;
 }
 
 export function generateReactComponent(lastCapturedFrame, cfg) {
@@ -207,7 +210,7 @@ export function generateReactComponent(lastCapturedFrame, cfg) {
   const col2 = Math.min(f.cols, Math.ceil((fr.x + fr.w) / cellW));
   const row2 = Math.min(f.rows, Math.ceil((fr.y + fr.h) / cellH));
 
-  const bgColor = `rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})`;
+  const bgColor = cfg.transparentBg ? 'transparent' : `rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})`;
 
   // Build row data as a compact array
   const rowData = [];
@@ -309,7 +312,7 @@ export function generateSVG(tileCanvas, cfg) {
   const esc=(s)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const ox=fr.x,oy=fr.y,outW=fr.w,outH=fr.h;
   let svgContent = '';
-  {const cc=cfg.canvasColor; svgContent+=`  <rect width="${outW}" height="${outH}" fill="rgb(${cc.r},${cc.g},${cc.b})"/>\n`;}
+  if (!cfg.transparentBg) {const cc=cfg.canvasColor; svgContent+=`  <rect width="${outW}" height="${outH}" fill="rgb(${cc.r},${cc.g},${cc.b})"/>\n`;}
 
   // Source canvas reference for SVG embedding
   const srcCanvas = document.createElement('canvas');
@@ -350,7 +353,7 @@ export function getCompositeCanvas(asciiCanvas, srcCanvas, hdrCanvas, cfg, scale
   comp.width = fr.w*dpr; comp.height = fr.h*dpr;
   const c = comp.getContext('2d');
   c.scale(dpr, dpr); c.imageSmoothingEnabled = false;
-  { const cc=cfg.canvasColor; c.fillStyle=`rgb(${cc.r},${cc.g},${cc.b})`; c.fillRect(0,0,W,H); }
+  if (!cfg.transparentBg) { const cc=cfg.canvasColor; c.fillStyle=`rgb(${cc.r},${cc.g},${cc.b})`; c.fillRect(0,0,W,H); }
   if (cfg.sourceVisible) { c.globalAlpha=cfg.sourceOpacity; c.drawImage(srcCanvas,0,0,W,H); c.globalAlpha=1; }
   c.globalCompositeOperation = cfg.blendMode;
   if (cfg.asciiVisible) { c.globalAlpha=cfg.asciiOpacity; c.drawImage(asciiCanvas,0,0,W,H); c.globalAlpha=1; }
@@ -375,7 +378,7 @@ export function getHDRCompositeCanvas(asciiCanvas, srcCanvas, cfg, scale = 1) {
   c.scale(dpr, dpr); c.imageSmoothingEnabled = false;
 
   // Background
-  { const cc = cfg.canvasColor; c.fillStyle = `rgb(${cc.r},${cc.g},${cc.b})`; c.fillRect(0, 0, W, H); }
+  if (!cfg.transparentBg) { const cc = cfg.canvasColor; c.fillStyle = `rgb(${cc.r},${cc.g},${cc.b})`; c.fillRect(0, 0, W, H); }
 
   // Source layer
   if (cfg.sourceVisible) {
@@ -405,6 +408,133 @@ export function getHDRCompositeCanvas(asciiCanvas, srcCanvas, cfg, scale = 1) {
   }
 
   return comp;
+}
+
+// ── Standalone Animation HTML (no source image) ─────────────────────
+export function generateStandaloneAnimHTML(cfg) {
+  const W = cfg.useCustomFrame ? cfg.frameWidth : 800;
+  const H = cfg.useCustomFrame ? cfg.frameHeight : 600;
+
+  const embedCfg = {
+    chars: cfg.chars,
+    fontSize: cfg.fontSize,
+    lineHeight: cfg.lineHeight,
+    mix: cfg.mix,
+    animType: cfg.animType,
+    animSpeed: cfg.animSpeed,
+    animAmplitude: cfg.animAmplitude,
+    canvasColor: cfg.canvasColor,
+    asciiColorOverride: cfg.asciiColorOverride,
+    asciiColor: cfg.asciiColor,
+  };
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ASCII Animation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:${cfg.transparentBg ? 'transparent' : `rgb(${embedCfg.canvasColor.r},${embedCfg.canvasColor.g},${embedCfg.canvasColor.b})`};overflow:hidden;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center}
+canvas{display:block}
+</style>
+</head>
+<body>
+<canvas id="c" width="${W}" height="${H}"></canvas>
+<` + `script>
+(function(){
+const CFG=${JSON.stringify(embedCfg).replace(/</g,'\\u003c')};
+const W=${W},H=${H};
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const startTime=performance.now();
+const rainChars='アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ';
+
+function render(){
+  const fontSize=CFG.fontSize;
+  const cellW=fontSize*0.6,cellH=fontSize*CFG.lineHeight;
+  const cols=Math.ceil(W/cellW),rows=Math.ceil(H/cellH);
+  const t=(performance.now()-startTime)/1000;
+  const speed=Math.pow(CFG.animSpeed/50,1.5),amp=CFG.animAmplitude/100;
+  const chars=CFG.chars,charLen=chars.length;
+  const type=CFG.animType;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.font=fontSize+'px "Courier New","Consolas",monospace';
+  ctx.textBaseline='top';
+
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    let ch=' ',alpha=0.7,cr=180,cg=175,cb=180;
+    if(type==='default'){
+      const brt=0.3+Math.sin(x*0.15+y*0.12+t*0.8*speed)*0.2+Math.sin(x*0.08-y*0.06+t*1.2*speed)*0.15;
+      const ci=Math.min(Math.floor(Math.max(0,brt)*charLen),charLen-1);
+      ch=chars[ci];alpha=0.3+brt*0.5;
+      cr=120+brt*100;cg=115+brt*95;cb=125+brt*100;
+    }else if(type==='wave'){
+      const off=Math.sin(x*0.15+t*3*speed)*amp*4;
+      const srcY=y+Math.round(off);
+      const brt=Math.max(0,Math.min(1,0.5+Math.sin(x*0.2+srcY*0.1+t)*0.3));
+      const ci=Math.min(Math.floor(brt*charLen),charLen-1);
+      ch=chars[ci];alpha=0.4+brt*0.6;
+      cr=100+brt*155;cg=90+brt*140;cb=110+brt*145;
+    }else if(type==='breathe'){
+      const pulse=(Math.sin(t*2*speed)+1)*0.5;
+      const cx2=cols/2,cy2=rows/2;
+      const dist=Math.sqrt((x-cx2)*(x-cx2)+(y-cy2)*(y-cy2));
+      const maxD=Math.sqrt(cx2*cx2+cy2*cy2);
+      const brt=Math.max(0,pulse*(1-dist/maxD*amp));
+      const ci=Math.min(Math.floor(brt*charLen),charLen-1);
+      ch=chars[ci];alpha=0.3+brt*0.7;
+      cr=80+brt*175;cg=80+brt*175;cb=90+brt*165;
+    }else if(type==='rain'){
+      const colSeed=Math.sin(x*127.1+311.7)*43758.5453;
+      const colHash=colSeed-Math.floor(colSeed);
+      const fallSpeed=(0.5+colHash)*speed*8;
+      const yOff=(t*fallSpeed+colHash*rows)%(rows*1.5);
+      const dist2=y-yOff;
+      if(dist2>0&&dist2<amp*12){
+        const brt=1-dist2/(amp*12);
+        ch=rainChars[(Math.floor(t*12+x*7+y*3)%rainChars.length)];
+        alpha=brt*0.9;cr=20;cg=Math.floor(120+brt*135);cb=40;
+      }else{ch=' ';alpha=0;}
+    }else if(type==='glitch'){
+      const gs=Math.floor(t*6*speed);
+      const rh2=Math.sin(y*43.1+gs*17.3)*43758.5453;
+      const rv=rh2-Math.floor(rh2);
+      if(rv>(1-amp*0.3)){
+        const shift=Math.floor((rv-0.5)*20*amp);
+        const sx=(x+shift+cols)%cols;
+        const brt=0.5+Math.sin(sx*0.3+y*0.2)*0.3;
+        const ci=Math.min(Math.floor(brt*charLen),charLen-1);
+        ch=chars[ci];alpha=0.8;
+        cr=200+Math.floor(Math.random()*55);cg=50;cb=50;
+      }else{
+        const brt=0.3+Math.sin(x*0.15+y*0.1)*0.15;
+        const ci=Math.min(Math.floor(brt*charLen),charLen-1);
+        ch=chars[ci];alpha=0.35;cr=140;cg=135;cb=140;
+      }
+    }else if(type==='flow'){
+      const flowOff=t*speed*5*amp+Math.sin(y*0.2)*amp*2;
+      const sx=((x+Math.floor(flowOff))%cols+cols)%cols;
+      const brt=0.4+Math.sin(sx*0.2+y*0.15+t*0.5)*0.3;
+      const ci=Math.min(Math.floor(brt*charLen),charLen-1);
+      ch=chars[ci];alpha=0.4+brt*0.5;
+      cr=80+brt*140;cg=100+brt*130;cb=120+brt*135;
+    }
+    if(ch===' '||alpha<0.02)continue;
+    ctx.globalAlpha=alpha*CFG.mix;
+    ctx.fillStyle='rgb('+Math.round(cr)+','+Math.round(cg)+','+Math.round(cb)+')';
+    ctx.fillText(ch,x*cellW,y*cellH);
+  }
+  ctx.globalAlpha=1;
+  requestAnimationFrame(render);
+}
+render();
+})();
+<` + `/script>
+</body>
+</html>`;
 }
 
 // ── Utility ─────────────────────────────────────────────────────────
@@ -461,7 +591,7 @@ export function generateInteractionHTML(frame, cfg) {
 <title>ASCII Interaction</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b});overflow:hidden;width:100vw;height:100vh;cursor:crosshair}
+body{background:${cfg.transparentBg ? 'transparent' : `rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})`};overflow:hidden;width:100vw;height:100vh;cursor:crosshair}
 canvas{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 </style>
 </head>
@@ -597,7 +727,7 @@ const CFG = {
   revealActive: ${cfg.revealActive},
   revealDirection: '${cfg.revealDirection.replace(/[^a-z-]/gi,'')}',
   revealSpeed: ${cfg.revealSpeed},
-  bgColor: 'rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})',
+  bgColor: '${cfg.transparentBg ? 'transparent' : `rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})`}',
 };
 
 export default function AsciiInteraction({ style, className }) {
@@ -725,173 +855,282 @@ export function generateFramerOverride(frame, cfg) {
   if (!frame) return '';
   const { chars: frameChars, colors: frameColors, cols, rows, cellW, cellH } = frame;
 
-  const gridData = [];
+  // ── Build compact data: indexed color palette + base64-encoded binary cells ──
+  const colorMap = new Map();
+  const palette = [];
+  const cellList = [];
   for (let y = 0; y < rows; y++) {
-    const rowChars = [];
-    const rowColors = [];
     for (let x = 0; x < cols; x++) {
       const idx = y * cols + x;
-      rowChars.push(frameChars[idx] || ' ');
-      rowColors.push(frameColors[idx] || 'rgb(0,0,0)');
+      const ch = frameChars[idx];
+      if (!ch || ch === ' ') continue;
+      const col = frameColors[idx] || 'rgb(0,0,0)';
+      let ci = colorMap.get(col);
+      if (ci === undefined) { ci = palette.length; colorMap.set(col, ci); palette.push(col); }
+      cellList.push(x, y, ch.charCodeAt(0), ci);
     }
-    gridData.push({ c: rowChars.join(''), k: rowColors });
   }
 
+  // Encode cells as base64 binary (4 bytes per cell: x_hi,x_lo,y,charCode,colorIdx packed into Uint8)
+  // Use 2 bytes for x (supports cols>255), 1 byte y, 1 byte char, 1 byte color = 5 bytes per cell
+  // But for most grids: x<256, y<256, charCode<128, colorIdx<256 → use Uint8Array 4 bytes per cell
+  const needsWideX = cols > 255;
+  const bytesPerCell = needsWideX ? 5 : 4;
+  const bin = new Uint8Array(cellList.length / 4 * bytesPerCell);
+  for (let i = 0, j = 0; i < cellList.length; i += 4, j += bytesPerCell) {
+    if (needsWideX) {
+      bin[j] = (cellList[i] >> 8) & 0xFF;
+      bin[j+1] = cellList[i] & 0xFF;
+      bin[j+2] = cellList[i+1];
+      bin[j+3] = cellList[i+2];
+      bin[j+4] = cellList[i+3];
+    } else {
+      bin[j] = cellList[i];
+      bin[j+1] = cellList[i+1];
+      bin[j+2] = cellList[i+2];
+      bin[j+3] = cellList[i+3];
+    }
+  }
+
+  // Convert to base64
+  let b64 = '';
+  const bytes = new Uint8Array(bin);
+  for (let i = 0; i < bytes.length; i++) b64 += String.fromCharCode(bytes[i]);
+  b64 = btoa(b64);
+
+  const cellCount = cellList.length / 4;
+  const hasReveal = cfg.revealActive;
+  const hasHover = cfg.hoverEnabled && cfg.basicHover;
+  const hR = cfg.hoverRadius;
+  const hR2 = hR * hR;
+  const revealDir = cfg.revealDirection;
+
   return `import type { ComponentType } from "react"
-import { useRef, useEffect, useCallback } from "react"
+import { forwardRef, useRef, useEffect } from "react"
 
-const GRID = ${JSON.stringify(gridData).replace(/</g,'\\u003c')};
-const CFG = {
-  fontSize: ${cfg.fontSize},
-  cellW: ${cellW},
-  cellH: ${cellH},
-  cols: ${cols},
-  rows: ${rows},
-  mix: ${cfg.mix},
-  hoverEnabled: ${cfg.hoverEnabled},
-  basicHover: ${cfg.basicHover},
-  hoverRadius: ${cfg.hoverRadius},
-  hoverExposure: ${cfg.hoverExposure},
-  revealActive: ${cfg.revealActive},
-  revealDirection: "${cfg.revealDirection}",
-  revealSpeed: ${cfg.revealSpeed},
-  bgColor: "rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})",
-};
+const P=[${palette.map(c => `"${c}"`).join(',')}];
+const D=atob("${b64}");
+const BPC=${bytesPerCell},NC=${cellCount};
+// Decode binary to typed arrays at load time
+const X=new Uint16Array(NC),Y=new Uint8Array(NC),CH=new Uint8Array(NC),CI=new Uint8Array(NC);
+for(let i=0,j=0;i<NC;i++,j+=BPC){${needsWideX ?
+  'X[i]=(D.charCodeAt(j)<<8)|D.charCodeAt(j+1);Y[i]=D.charCodeAt(j+2);CH[i]=D.charCodeAt(j+3);CI[i]=D.charCodeAt(j+4);' :
+  'X[i]=D.charCodeAt(j);Y[i]=D.charCodeAt(j+1);CH[i]=D.charCodeAt(j+2);CI[i]=D.charCodeAt(j+3);'}}
+const COLS=${cols},ROWS=${rows},CW=${cellW},CWH=${cellH};
 
-export function withASCIIInteraction(Component: ComponentType): ComponentType {
-  return (props: any) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const mouseRef = useRef({ x: -9999, y: -9999 });
-    const trailRef = useRef<any[]>([]);
+export function withASCIIInteraction(Component:ComponentType):ComponentType{
+return forwardRef((props:any,ref:any)=>{
+  const wr=useRef<HTMLDivElement>(null),cr=useRef<HTMLCanvasElement>(null);
+  const mx=useRef(-1e4),my=useRef(-1e4);${hasHover ? `
+  const trail=useRef<Float64Array>(new Float64Array(${Math.min(120, hR * 6)} * 3));
+  const tLen=useRef(0);` : ''}
 
-    const onMouseMove = useCallback((e: React.MouseEvent) => {
-      const r = canvasRef.current?.getBoundingClientRect();
-      if (r) mouseRef.current = { x: e.clientX - r.left, y: e.clientY - r.top };
-    }, []);
+  useEffect(()=>{
+    const c=cr.current,w=wr.current;
+    if(!c||!w)return;
+    const ctx=c.getContext("2d",{alpha:true});
+    if(!ctx)return;
+    const gW=COLS*CW,gH=ROWS*CWH;
+    let W=gW,H=gH,sx=1,sy=1,dirty=true;
 
-    const onMouseLeave = useCallback(() => {
-      mouseRef.current = { x: -9999, y: -9999 };
-    }, []);
+    const off=document.createElement("canvas");
+    off.width=gW;off.height=gH;
+    const ox=off.getContext("2d")!;
+    ox.font='${cfg.fontSize}px "Courier New","Consolas",monospace';
+    ox.textBaseline="top";
+    ox.globalAlpha=${cfg.mix};
+    for(let i=0;i<NC;i++){
+      ox.fillStyle=P[CI[i]];
+      ox.fillText(String.fromCharCode(CH[i]),X[i]*CW,Y[i]*CWH);
+    }
+    ox.globalAlpha=1;
 
-    useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      const W = CFG.cols * CFG.cellW;
-      const H = CFG.rows * CFG.cellH;
-      canvas.width = W;
-      canvas.height = H;
-      const revealStart = performance.now();
-      let revealDone = !CFG.revealActive;
-      let animId: number;
+    function resize(){
+      const r=w.getBoundingClientRect();
+      W=r.width||gW;H=r.height||gH;
+      c.width=W;c.height=H;
+      sx=W/gW;sy=H/gH;
+      dirty=true;
+    }
+    resize();
+    const ro=new ResizeObserver(resize);
+    ro.observe(w);
+${hasReveal ? `
+    const t0=performance.now();
+    const dur=${(3 * (1 - cfg.revealSpeed / 100) + 0.3).toFixed(3)};
+    const rp=new Float32Array(NC);
+    for(let i=0;i<NC;i++){
+      const nx=X[i]/COLS,ny=Y[i]/ROWS;
+      ${revealDir === 'left-right' ? 'rp[i]=nx;' :
+        revealDir === 'right-left' ? 'rp[i]=1-nx;' :
+        revealDir === 'top-bottom' ? 'rp[i]=ny;' :
+        revealDir === 'bottom-top' ? 'rp[i]=1-ny;' :
+        revealDir === 'center-out' ? 'rp[i]=Math.abs(nx-.5)*2;' :
+        revealDir === 'out-center' ? 'rp[i]=1-Math.abs(nx-.5)*2;' :
+        revealDir === 'radial-out' ? '{const a=nx-.5,b=ny-.5;rp[i]=Math.sqrt(a*a+b*b)*2;}' :
+        '{const a=nx-.5,b=ny-.5;rp[i]=1-Math.sqrt(a*a+b*b)*2;}'}
+    }
+    let revealDone=false;` : ''}
+    let afId=0;
+${hasHover ? `
+    const hR=${hR},hR2=${hR2},tMax=${Math.min(120, hR * 6)};` : ''}
 
-      function render() {
-        ctx!.clearRect(0, 0, W, H);
-        ctx!.font = CFG.fontSize + 'px "Courier New","Consolas",monospace';
-        ctx!.textBaseline = "top";
-        const { x: mx, y: my } = mouseRef.current;
-        const mCol = Math.floor(mx / CFG.cellW);
-        const mRow = Math.floor(my / CFG.cellH);
-        const now = performance.now();
-        const trail = trailRef.current;
-
-        let revealProg = 1;
-        if (!revealDone) {
-          const elapsed = (now - revealStart) / 1000;
-          const dur = 3 * (1 - CFG.revealSpeed / 100) + 0.3;
-          revealProg = Math.min(1, elapsed / dur);
-          if (revealProg >= 1) revealDone = true;
+    function frame(){
+${hasReveal || hasHover ? `      const now=performance.now();` : ''}
+${hasReveal ? `
+      if(!revealDone){
+        const prog=Math.min(1,(now-t0)/1000/dur);
+        if(prog>=1)revealDone=true;
+        ctx.clearRect(0,0,W,H);
+        ctx.save();ctx.scale(sx,sy);
+        ctx.font='${cfg.fontSize}px "Courier New","Consolas",monospace';
+        ctx.textBaseline="top";
+        for(let i=0;i<NC;i++){
+          const vis=(prog-rp[i]*.8)/.2;
+          if(vis<.01)continue;
+          ctx.globalAlpha=${cfg.mix}*(vis>1?1:vis);
+          ctx.fillStyle=P[CI[i]];
+          ctx.fillText(String.fromCharCode(CH[i]),X[i]*CW,Y[i]*CWH);
         }
-
-        if (CFG.hoverEnabled && mx > 0) {
-          trail.push({ col: mCol, row: mRow, t: now });
-          while (trail.length && now - trail[0].t > 400) trail.shift();
-        }
-
-        for (let y = 0; y < CFG.rows; y++) {
-          const row = GRID[y];
-          if (!row) continue;
-          for (let x = 0; x < CFG.cols; x++) {
-            const ch = row.c[x];
-            const color = row.k[x];
-            if (!revealDone) {
-              let cellProg = 0;
-              const nx = x / CFG.cols, ny = y / CFG.rows;
-              const dir = CFG.revealDirection;
-              if (dir === "left-right") cellProg = nx;
-              else if (dir === "right-left") cellProg = 1 - nx;
-              else if (dir === "top-bottom") cellProg = ny;
-              else if (dir === "bottom-top") cellProg = 1 - ny;
-              else if (dir === "center-out") cellProg = Math.abs(nx - 0.5) * 2;
-              else if (dir === "out-center") cellProg = 1 - Math.abs(nx - 0.5) * 2;
-              else if (dir === "radial-out") { const dx = nx - 0.5, dy = ny - 0.5; cellProg = Math.sqrt(dx*dx+dy*dy)*2; }
-              else if (dir === "radial-in") { const dx = nx - 0.5, dy = ny - 0.5; cellProg = 1 - Math.sqrt(dx*dx+dy*dy)*2; }
-              const vis = Math.max(0, Math.min(1, (revealProg - cellProg * 0.8) / 0.2));
-              if (vis < 0.01) continue;
-              ctx!.globalAlpha = vis * CFG.mix;
-            } else {
-              ctx!.globalAlpha = CFG.mix;
-            }
-
-            let hf = 0;
-            if (CFG.hoverEnabled && CFG.basicHover) {
-              const dx = x - mCol, dy = y - mRow;
-              const dist = Math.sqrt(dx*dx + dy*dy);
-              if (dist < CFG.hoverRadius) hf = 1 - (dist/CFG.hoverRadius)*(dist/CFG.hoverRadius);
-              for (let ti = 0; ti < trail.length; ti++) {
-                const tp = trail[ti], str = 1 - (now - tp.t) / 400;
-                const dd = Math.sqrt((x-tp.col)*(x-tp.col) + (y-tp.row)*(y-tp.row));
-                const tR = CFG.hoverRadius * str;
-                if (dd < tR) { const v = 1 - (dd/tR)*(dd/tR); hf = Math.max(hf, v*str*0.6); }
-              }
-            }
-
-            const px = Math.floor(x * CFG.cellW);
-            const py = Math.floor(y * CFG.cellH);
-            if (hf > 0.5) {
-              ctx!.fillStyle = color;
-              ctx!.fillRect(px, py, Math.ceil(CFG.cellW)+1, Math.ceil(CFG.cellH)+1);
-              ctx!.globalAlpha = 1;
-              continue;
-            }
-            if (ch === " ") { ctx!.globalAlpha = 1; continue; }
-            ctx!.fillStyle = color;
-            ctx!.fillText(ch, px, py);
-            ctx!.globalAlpha = 1;
-          }
-        }
-        animId = requestAnimationFrame(render);
+        ctx.restore();
+        afId=requestAnimationFrame(frame);
+        return;
+      }` : ''}
+${hasHover ? `
+      const gx=mx.current/sx,gy=my.current/sy;
+      const mc=gx/CW|0,mr=gy/CWH|0;
+      const onCanvas=mx.current>-9e3;
+      const t=trail.current,tl=tLen.current;
+      if(onCanvas&&tl<tMax*3){
+        t[tl]=mc;t[tl+1]=mr;t[tl+2]=now;
+        tLen.current=tl+3;
       }
-      render();
-      return () => cancelAnimationFrame(animId);
-    }, []);
+      let wIdx=0;
+      for(let i=0;i<tLen.current;i+=3){
+        if(now-t[i+2]<400){
+          if(wIdx!==i){t[wIdx]=t[i];t[wIdx+1]=t[i+1];t[wIdx+2]=t[i+2];}
+          wIdx+=3;
+        }
+      }
+      tLen.current=wIdx;
+      if(!onCanvas&&wIdx===0){
+        if(dirty){
+          ctx.clearRect(0,0,W,H);
+          ctx.drawImage(off,0,0,W,H);
+          dirty=false;
+        }
+        afId=requestAnimationFrame(frame);
+        return;
+      }
+      dirty=true;
+      ctx.clearRect(0,0,W,H);
+      ctx.save();ctx.scale(sx,sy);
+      ctx.font='${cfg.fontSize}px "Courier New","Consolas",monospace';
+      ctx.textBaseline="top";
+      for(let i=0;i<NC;i++){
+        const cx=X[i],cy=Y[i];
+        let hf=0;
+        if(onCanvas){
+          const dx=cx-mc,dy=cy-mr,d2=dx*dx+dy*dy;
+          if(d2<hR2)hf=1-d2/hR2;
+        }
+        for(let j=0;j<wIdx;j+=3){
+          const str=1-(now-t[j+2])/400;
+          const dx=cx-t[j],dy=cy-t[j+1],d2=dx*dx+dy*dy;
+          const tR2=hR2*str*str;
+          if(d2<tR2){const v=(1-d2/tR2)*str*.6;if(v>hf)hf=v;}
+        }
+        ctx.globalAlpha=${cfg.mix};
+        if(hf>.5){
+          ctx.fillStyle=P[CI[i]];
+          ctx.fillRect(cx*CW,cy*CWH,CW+1,CWH+1);
+        }else{
+          ctx.fillStyle=P[CI[i]];
+          ctx.fillText(String.fromCharCode(CH[i]),cx*CW,cy*CWH);
+        }
+      }
+      ctx.restore();` : `
+      if(dirty){
+        ctx.clearRect(0,0,W,H);
+        ctx.drawImage(off,0,0,W,H);
+        dirty=false;
+      }`}
+      afId=requestAnimationFrame(frame);
+    }
+    frame();
+    return()=>{cancelAnimationFrame(afId);ro.disconnect();};
+  },[]);
 
-    return (
-      <div
-        style={{
-          position: "relative",
-          background: CFG.bgColor,
-          display: "inline-block",
-          overflow: "hidden",
-        }}
-        onMouseMove={onMouseMove}
-        onMouseLeave={onMouseLeave}
-      >
-        <Component {...props} />
-        <canvas
-          ref={canvasRef}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            pointerEvents: "none",
-            cursor: "crosshair",
-          }}
-        />
-      </div>
-    );
-  };
+  return(
+    <div ref={(el:any)=>{(wr as any).current=el;if(typeof ref==="function")ref(el);else if(ref)ref.current=el;}}
+      style={{position:"relative",width:"100%",height:"100%",background:"${cfg.transparentBg ? 'transparent' : `rgb(${cfg.canvasColor.r},${cfg.canvasColor.g},${cfg.canvasColor.b})`}",overflow:"hidden"}}
+      onMouseMove={(e:any)=>{const r=cr.current?.getBoundingClientRect();if(r){mx.current=e.clientX-r.left;my.current=e.clientY-r.top;}}}
+      onMouseLeave={()=>{mx.current=-1e4;my.current=-1e4;}}>
+      <Component {...props} style={{...props?.style,opacity:0}}/>
+      <canvas ref={cr} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none"}}/>
+    </div>
+  );
+}) as any;
 }
 `;}
 
+export function generateFramerComponent(frame, cfg) {
+  if (!frame) return '';
+  const { chars: frameChars, colors: frameColors, cols, rows, cellW, cellH } = frame;
+
+  // First pass: collect non-empty cells and find bounding box
+  const colorMap = new Map();
+  const palette = [];
+  const rawCells = [];
+  let minX = cols, minY = rows, maxX = 0, maxY = 0;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const idx = y * cols + x;
+      const ch = frameChars[idx];
+      if (!ch || ch === ' ') continue;
+      const col = frameColors[idx] || 'rgb(0,0,0)';
+      let ci = colorMap.get(col);
+      if (ci === undefined) { ci = palette.length; colorMap.set(col, ci); palette.push(col); }
+      rawCells.push(x, y, ch.charCodeAt(0), ci);
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (rawCells.length === 0) return '';
+
+  // Tight bounding box cols/rows (offset all cells to start at 0,0)
+  const bbCols = maxX - minX + 1;
+  const bbRows = maxY - minY + 1;
+
+  // Second pass: offset cell coordinates to bounding box origin
+  const cellList = [];
+  for (let i = 0; i < rawCells.length; i += 4) {
+    cellList.push(rawCells[i] - minX, rawCells[i+1] - minY, rawCells[i+2], rawCells[i+3]);
+  }
+
+  const needsWideX = bbCols > 255;
+  const bytesPerCell = needsWideX ? 5 : 4;
+  const bin = new Uint8Array(cellList.length / 4 * bytesPerCell);
+  for (let i = 0, j = 0; i < cellList.length; i += 4, j += bytesPerCell) {
+    if (needsWideX) {
+      bin[j] = (cellList[i] >> 8) & 0xFF; bin[j+1] = cellList[i] & 0xFF;
+      bin[j+2] = cellList[i+1]; bin[j+3] = cellList[i+2]; bin[j+4] = cellList[i+3];
+    } else {
+      bin[j] = cellList[i]; bin[j+1] = cellList[i+1]; bin[j+2] = cellList[i+2]; bin[j+3] = cellList[i+3];
+    }
+  }
+  let b64 = '';
+  const bytes = new Uint8Array(bin);
+  for (let i = 0; i < bytes.length; i++) b64 += String.fromCharCode(bytes[i]);
+  b64 = btoa(b64);
+
+  const cellCount = cellList.length / 4;
+  const hR = cfg.hoverRadius || 8;
+  const mix = cfg.mix;
+  const fontSize = cfg.fontSize;
+  const bgDefault = cfg.transparentBg ? 'transparent' : 'rgb(' + cfg.canvasColor.r + ',' + cfg.canvasColor.g + ',' + cfg.canvasColor.b + ')';
+
+  return buildComponentCode(palette, b64, bytesPerCell, cellCount, needsWideX, bbCols, bbRows, cellW, cellH, fontSize, mix, hR, bgDefault);
+}

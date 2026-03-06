@@ -31,7 +31,6 @@
 </script>
 
 <div class="presets-panel">
-  <div class="presets-header"><span>Presets</span></div>
   <div class="presets-save-row">
     <input type="text" bind:value={name} placeholder="Preset name..." onkeydown={(e) => { if (e.key === 'Enter') save(); }} />
     <button onclick={save}>Save</button>

@@ -37,7 +37,7 @@ const defaults = {
   asciiVisible: true,
   effectIntensity: 100,
   videoMode: false,
-  animEnabled: true,
+  animEnabled: false,
   animType: 'default',
   animSpeed: 50,
   animAmplitude: 30,
@@ -73,6 +73,9 @@ const defaults = {
   hdrBloomThreshold: 40,
   hdrIntensity: 150,
   hdrShadowLift: 20,
+  frameWidth: 800,
+  frameHeight: 600,
+  useCustomFrame: false,
 };
 
 export { CHAR_PRESETS, defaults };
