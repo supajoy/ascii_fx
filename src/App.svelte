@@ -6,7 +6,6 @@
   import ImageSidebar from './components/sidebar/ImageSidebar.svelte';
   import VideoSidebar from './components/sidebar/VideoSidebar.svelte';
   import LeftSidebar from './components/sidebar/LeftSidebar.svelte';
-  import VideoLeftSidebar from './components/sidebar/VideoLeftSidebar.svelte';
   import HelpModal from './components/HelpModal.svelte';
   import ChangelogModal from './components/ChangelogModal.svelte';
   import BootScreen from './components/BootScreen.svelte';
@@ -39,11 +38,10 @@
 
   {#if activeTab === 'image'}
     <ImageSidebar />
-    <LeftSidebar />
   {:else}
     <VideoSidebar />
-    <VideoLeftSidebar />
   {/if}
+  <LeftSidebar />
 
   <button class="changelog-btn" onclick={toggleChangelog} title="Changelog">changelog</button>
   <button class="help-btn" onclick={toggleHelp} title="Help & Shortcuts [H]">?</button>

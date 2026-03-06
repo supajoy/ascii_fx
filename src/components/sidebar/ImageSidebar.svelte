@@ -7,7 +7,6 @@
   import Section from './Section.svelte';
   import CharPanel from '../panels/CharPanel.svelte';
   import EffectsPanel from '../panels/EffectsPanel.svelte';
-  import AnimPanel from '../panels/AnimPanel.svelte';
   import AppearSection from '../panels/AppearSection.svelte';
   import HoverSection from '../panels/HoverSection.svelte';
   import InteractExport from '../panels/InteractExport.svelte';
@@ -316,10 +315,6 @@
           </div>
         {/if}
       </div>
-
-      <Section title="Animation">
-        <AnimPanel />
-      </Section>
 
       <Section title="Effects">
         <EffectsPanel />
